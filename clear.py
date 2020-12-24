@@ -1,7 +1,7 @@
 from dxl.dxlchain import DxlChain
 from dxl.dxlcore import Dxl
 
-port="COM21"
+port="/dev/ttyACM0"
 timeout=0.01
 
 rates=[2000000/(data+1) for data in range(0,255)]
@@ -12,12 +12,12 @@ rates.append(3000000)
     
 chain=DxlChain(port,rate=1000000,timeout=timeout)
 for rate in rates:
-    print "rate",rate
+    print("rate",rate)
     chain.reopen(port,rate,timeout=timeout)
     try:
         chain.factory_reset(Dxl.BROADCAST)
-    except Exception,e:
-        print e
+    except Exception as e:
+        print(e)
     chain.close()
 
 

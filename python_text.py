@@ -1,4 +1,4 @@
-from Tkinter import *
+from tkinter import *
 
 import keyword
 
@@ -45,7 +45,7 @@ class PythonText(Text):
     def colorize(self,*args,**kwargs):        
         self.deleteTags()
         self.createTags()
-        for regexp in self.patterns.keys():
+        for regexp in list(self.patterns.keys()):
             self.highlight_pattern(regexp,self.patterns[regexp],regexp=True)
         
     def highlight_pattern(self, pattern, tag, start="1.0", end="end", regexp=False):

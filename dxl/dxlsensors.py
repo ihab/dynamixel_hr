@@ -3,8 +3,8 @@
 
 # WINDOWS WARNING: For best performance, parameters of the COM Port should be set to maximum baud rate, and 1ms delay (Device Manager, COM Ports, properties, advanced)
 
-from dxlcore import *
-from dxlregisters import *
+from .dxlcore import *
+from .dxlregisters import *
 
 
 
@@ -16,8 +16,7 @@ class DxlSensor(DxlElement):
         return False
     
 
-class DxlSensorAXS1(DxlSensor):
-    __metaclass__=ModelRegisteringMetaclass
+class DxlSensorAXS1(DxlSensor, metaclass=ModelRegisteringMetaclass):
     model_name="AXS1"
     model_number=13
     documentation_url="http://support.robotis.com/en/product/auxdevice/sensor/dxl_ax_s1.htm"

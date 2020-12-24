@@ -3,8 +3,8 @@
 
 # WINDOWS WARNING: For best performance, parameters of the COM Port should be set to maximum baud rate, and 1ms delay (Device Manager, COM Ports, properties, advanced)
 
-from dxlcore import *
-from dxlregisters import *
+from .dxlcore import *
+from .dxlregisters import *
 
 
 
@@ -16,8 +16,7 @@ class DxlController(DxlElement):
         return False
     
 
-class DxlControllerCM730(DxlController):
-    __metaclass__=ModelRegisteringMetaclass
+class DxlControllerCM730(DxlController, metaclass=ModelRegisteringMetaclass):
     model_name="CM730"
     model_number=29440
     documentation_url="http://support.robotis.com/en/product/darwin-op/references/reference/hardware_specifications/electronics/sub_controller_%28cm-730%29.htm"

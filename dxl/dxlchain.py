@@ -4,10 +4,10 @@
 
 # WINDOWS WARNING: For best performance, parameters of the COM Port should be set to maximum baud rate, and 1ms delay (Device Manager, COM Ports, properties, advanced)
 
-from dxlcore import *
-from dxlregisters import *
-from dxlmotors import *
-from dxlsensors import *
+from .dxlcore import *
+from .dxlregisters import *
+from .dxlmotors import *
+from .dxlsensors import *
 
 import sys
 import serial
@@ -17,7 +17,7 @@ from threading import Lock
 import json
 import array
 from collections import OrderedDict
-from post_threading import Post
+from .post_threading import Post
 
 
     
@@ -89,9 +89,8 @@ class DxlChain:
     def _send(self, id, packet):
         """ Takes a payload, packages it as [header,id,length,payload,checksum], sends it on serial and flush"""
         checksumed_data = [id, len(packet)+1] + packet
-        
-        data="".join(map(chr, [0xFF, 0xFF] + checksumed_data + [self.checksum(checksumed_data)]))
-        self.port.write(data)
+        full_data = [0xFF, 0xFF] + checksumed_data + [self.checksum(checksumed_data)]
+        self.port.write(b''.join(map(lambda n: n.to_bytes(1, "big"), full_data)))
         self.port.flushOutput()
 
     def recv(self):
@@ -203,55 +202,55 @@ class DxlChain:
 
     def get_reg(self,id,name):
         """Read a named register from a motor"""
-        if id not in self.motors.keys():
-            raise DxlConfigurationException,'Motor ID %d does not exist on the chain'%(id) 
+        if id not in list(self.motors.keys()):
+            raise DxlConfigurationException('Motor ID %d does not exist on the chain'%(id)) 
         m=self.motors[id]
         reg=m.registers[name]
         (esize,cmd)=m.getRegisterCmd(name)
         (nid,data)=self.comm(id,cmd)
         if len(data)!=esize:
-            raise DxlCommunicationException,'Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data)) 
+            raise DxlCommunicationException('Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data))) 
         v=reg.fromdxl(data)
         logging.info('Motor ID %d get register %s: %d'%(id,name,v) )
         return v
 
     def get_reg_si(self,id,name):
         """Read a named register from a motor and returns value converted to SI units"""
-        if id not in self.motors.keys():
-            raise DxlConfigurationException,'Motor ID %d does not exist on the chain'%(id) 
+        if id not in list(self.motors.keys()):
+            raise DxlConfigurationException('Motor ID %d does not exist on the chain'%(id)) 
         m=self.motors[id]
         reg=m.registers[name]
         (esize,cmd)=m.getRegisterCmd(name)
         (nid,data)=self.comm(id,cmd)
         if len(data)!=esize:
-            raise DxlCommunicationException,'Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data)) 
+            raise DxlCommunicationException('Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data))) 
         v=reg.fromdxl(data)
         logging.info('Motor ID %d get register %s: %d'%(id,name,v) )
         return reg.tosi(v)
 
     def set_reg(self,id,name,v):
         """Sets a named register on a motor"""
-        if id not in self.motors.keys():
-            raise DxlConfigurationException,'Motor ID %d does not exist on the chain'%(id) 
+        if id not in list(self.motors.keys()):
+            raise DxlConfigurationException('Motor ID %d does not exist on the chain'%(id)) 
         m=self.motors[id]
         reg=m.registers[name]
         (esize,cmd)=m.setRegisterCmd(name,reg.todxl(v))
         (nid,data)=self.comm(id,cmd)
         logging.info('Motor ID %d set register %s to %d'%(id,name,v) )
         if len(data)!=esize:        
-            raise DxlCommunicationException,'Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data)) 
+            raise DxlCommunicationException('Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data))) 
 
     def set_reg_si(self,id,name,v):
         """Sets a named register on a motor using SI units"""
-        if id not in self.motors.keys():
-            raise DxlConfigurationException,'Motor ID %d does not exist on the chain'%(id) 
+        if id not in list(self.motors.keys()):
+            raise DxlConfigurationException('Motor ID %d does not exist on the chain'%(id)) 
         m=self.motors[id]
         reg=m.registers[name]
         (esize,cmd)=m.setRegisterCmd(name,reg.todxl(reg.fromsi(v)))
         (nid,data)=self.comm(id,cmd)
         logging.info('Motor ID %d set register %s to %d'%(id,name,v) )
         if len(data)!=esize:        
-            raise DxlCommunicationException,'Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data)) 
+            raise DxlCommunicationException('Motor ID %d did not retrieve expected register %s size %d: got %d bytes'%(id,name,esize,len(data))) 
 
     
     def sync_write_pos_speed(self,ids,positions,speeds): 
@@ -260,35 +259,35 @@ class DxlChain:
         regspeed=None
         # Check motor IDs, goal_pos and moving_speed register address and sizes
         for id in ids:
-            if id not in self.motors.keys():
-                raise DxlConfigurationException,"Motor ID %d cannot be found in chain"%id
+            if id not in list(self.motors.keys()):
+                raise DxlConfigurationException("Motor ID %d cannot be found in chain"%id)
             m=self.motors[id]
             reg_name="goal_pos"
-            if reg_name not in m.registers.keys():
-                raise DxlConfigurationException,"Synchronized write %s impossible on chain, register absent from motor ID %d"%(reg_name,id)
+            if reg_name not in list(m.registers.keys()):
+                raise DxlConfigurationException("Synchronized write %s impossible on chain, register absent from motor ID %d"%(reg_name,id))
             r=m.registers[reg_name]
             if regpos==None:
                 regpos=r
             else:
                 if regpos.address!=r.address:
-                    raise DxlConfigurationException,"Synchronized write %s impossible on chain, mismatch in register address for motor ID %d"%(reg_name,id)
+                    raise DxlConfigurationException("Synchronized write %s impossible on chain, mismatch in register address for motor ID %d"%(reg_name,id))
                 if regpos.size!=r.size:
-                    raise DxlConfigurationException,"Synchronized write %s impossible on chain, mismatch in register size for motor ID %d"(reg_name,id)
+                    raise DxlConfigurationException("Synchronized write %s impossible on chain, mismatch in register size for motor ID %d"(reg_name,id))
 
             reg_name="moving_speed"
-            if reg_name not in m.registers.keys():
-                raise DxlConfigurationException,"Synchronized write %s impossible on chain, register absent from motor ID %d"%(reg_name,id)
+            if reg_name not in list(m.registers.keys()):
+                raise DxlConfigurationException("Synchronized write %s impossible on chain, register absent from motor ID %d"%(reg_name,id))
             r=m.registers[reg_name]
             if regspeed==None:
                 regspeed=r
             else:
                 if regspeed.address!=r.address:
-                    raise DxlConfigurationException,"Synchronized write %s impossible on chain, mismatch in register address for motor ID %d"%(reg_name,id)
+                    raise DxlConfigurationException("Synchronized write %s impossible on chain, mismatch in register address for motor ID %d"%(reg_name,id))
                 if regspeed.size!=r.size:
-                    raise DxlConfigurationException,"Synchronized write %s impossible on chain, mismatch in register size for motor ID %d"(reg_name,id)
+                    raise DxlConfigurationException("Synchronized write %s impossible on chain, mismatch in register size for motor ID %d"(reg_name,id))
                 
         if (regpos.address+regpos.size)!=regspeed.address:
-            raise DxlConfigurationException,"Synchronized write goal_pos/moving_speed impossible on chain, registers are not consecutive"
+            raise DxlConfigurationException("Synchronized write goal_pos/moving_speed impossible on chain, registers are not consecutive")
             
         # Everything is ok, build command and send
         payload= [Dxl.CMD_SYNC_WRITE,regpos.address,regpos.size+regspeed.size]
@@ -311,20 +310,20 @@ class DxlChain:
         reg=None
         # Check motor IDs, goal_pos and moving_speed register address and sizes
         for id in ids:
-            if id not in self.motors.keys():
-                raise DxlConfigurationException,"Motor ID %d cannot be found in chain"%id
+            if id not in list(self.motors.keys()):
+                raise DxlConfigurationException("Motor ID %d cannot be found in chain"%id)
             m=self.motors[id]
             reg_name="goal_pos"
-            if reg_name not in m.registers.keys():
-                raise DxlConfigurationException,"Synchronized write %s impossible on chain, register absent from motor ID %d"%(reg_name,id)
+            if reg_name not in list(m.registers.keys()):
+                raise DxlConfigurationException("Synchronized write %s impossible on chain, register absent from motor ID %d"%(reg_name,id))
             r=m.registers[reg_name]
             if reg==None:
                 reg=r
             else:
                 if reg.address!=r.address:
-                    raise DxlConfigurationException,"Synchronized write %s impossible on chain, mismatch in register address for motor ID %d"%(reg_name,id)
+                    raise DxlConfigurationException("Synchronized write %s impossible on chain, mismatch in register address for motor ID %d"%(reg_name,id))
                 if reg.size!=r.size:
-                    raise DxlConfigurationException,"Synchronized write %s impossible on chain, mismatch in register size for motor ID %d"(reg_name,id)
+                    raise DxlConfigurationException("Synchronized write %s impossible on chain, mismatch in register size for motor ID %d"(reg_name,id))
                 
         # Everything is ok, build command and send
         payload= [Dxl.CMD_SYNC_WRITE,reg.address,reg.size]
@@ -356,7 +355,7 @@ class DxlChain:
             if broadcast:
                 ids=self._ping_broadcast()
             else:
-                ids=range(0,Dxl.BROADCAST)
+                ids=list(range(0,Dxl.BROADCAST))
             logging.info("Scanning IDs :"+str(ids))
             l=[]            
             for id in ids:
@@ -381,10 +380,10 @@ class DxlChain:
         self.get_motor_list(broadcast=broadcast)
         start=time.time()
         d=OrderedDict()
-        for (id,m) in self.motors.items():
+        for (id,m) in list(self.motors.items()):
             dd=OrderedDict()
             d[id]=dd
-            for (name,r) in m.registers.items():
+            for (name,r) in list(m.registers.items()):
                 dd[name]=self.get_reg(id,name)
         delay=time.time()-start
         logging.debug("get_configuration reg delay: %f"%delay)
@@ -394,32 +393,32 @@ class DxlChain:
         """Compare the motors available on a chain to those specified in the provided configuration, silently try to set all registers, generates an exception if there is a mismatch"""
         d={}
         self.get_motor_list()
-        for id in conf.keys():
+        for id in list(conf.keys()):
             sid=id
             iid=int(sid)
-            if iid not in self.motors.keys(): raise DxlConfigurationException,"Cannot find motor ID %d to be configured"%iid
+            if iid not in list(self.motors.keys()): raise DxlConfigurationException("Cannot find motor ID %d to be configured"%iid)
             motor=self.motors[iid]
 
             # Validate EEPROM read-only settings
-            for (name,val) in conf[sid].items():                                
-                if name not in motor.registers.keys(): continue
+            for (name,val) in list(conf[sid].items()):                                
+                if name not in list(motor.registers.keys()): continue
                 reg=motor.registers[name]
                 current=self.get_reg(iid,name)
                 if current==val: continue
                 # Value has to be changed
                 if not 'w' in reg.mode: # read only: generate error if setting is EEPROM
-                    if reg.eeprom: raise DxlConfigurationException,"Invalid EEPROM value in motor ID %d register %s: current=%d expected=%d"%(iid,name,current,val)
+                    if reg.eeprom: raise DxlConfigurationException("Invalid EEPROM value in motor ID %d register %s: current=%d expected=%d"%(iid,name,current,val))
                     else: pass
 
             # Check/Set all registers
-            for (name,val) in conf[sid].items():
-                if name not in motor.registers.keys(): raise DxlConfigurationException,"Cannot configure missing register %s on motor ID %d"%(name,iid)                    
+            for (name,val) in list(conf[sid].items()):
+                if name not in list(motor.registers.keys()): raise DxlConfigurationException("Cannot configure missing register %s on motor ID %d"%(name,iid))                    
                 reg=motor.registers[name]
                 current=self.get_reg(iid,name)
                 if current==val: continue
                 # Value has to be changed
                 if not 'w' in reg.mode: # read only: generate error if setting is EEPROM
-                    if reg.eeprom: raise DxlConfigurationException,"Invalid EEPROM value in motor ID %d register %s: current=%d expected=%d"%(iid,name,current,val)
+                    if reg.eeprom: raise DxlConfigurationException("Invalid EEPROM value in motor ID %d register %s: current=%d expected=%d"%(iid,name,current,val))
                     else: pass
                 else: # Set value
                     if reg.eeprom:
@@ -429,18 +428,18 @@ class DxlChain:
     def dump(self):
         """Obtain the motors chain configuration and dumps it on stdout"""
         conf=self.get_configuration()
-        print json.dumps(conf,indent=4,sort_keys=False)
+        print(json.dumps(conf,indent=4,sort_keys=False))
 
     def get_motors(self,ids=None):
         """Return the list of all motors ids, or a specific set, or a single id"""        
         if ids==None:
-            return self.motors.keys()
+            return list(self.motors.keys())
             
         elif type(ids)==type(list()):
             return ids
         elif type(ids)==type(int()):
             return [ids]
-        raise Exception,"Invalid type for motor id: %s"%str(ids)
+        raise Exception("Invalid type for motor id: %s"%str(ids))
         
             
             
@@ -505,7 +504,7 @@ class DxlChain:
         Set the position of a set of motors by providing an ID indexed dictionary
         This is a blocking function by default
         """
-        self.sync_write_pos(pos.keys(),pos.values())
+        self.sync_write_pos(list(pos.keys()),list(pos.values()))
         if blocking:
             self.wait_stopped()
         
@@ -529,7 +528,7 @@ class DxlChain:
         f.close()
         d=json.loads(txt)
         pos=dict()
-        for k,v in d.items():
+        for k,v in list(d.items()):
             pos[int(k)]=v            
         self.set_position(pos,blocking)
         
